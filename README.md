@@ -1,87 +1,310 @@
-# Welcome to React Router!
+# Table of Contents
 
-A modern, production-ready template for building full-stack React applications using React Router.
-
-[![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz.svg)](https://stackblitz.com/github/remix-run/react-router-templates/tree/main/default)
-
-## Features
-
-- 🚀 Server-side rendering
-- ⚡️ Hot Module Replacement (HMR)
-- 📦 Asset bundling and optimization
-- 🔄 Data loading and mutations
-- 🔒 TypeScript by default
-- 🎉 TailwindCSS for styling
-- 📖 [React Router docs](https://reactrouter.com/)
-
-## Getting Started
-
-### Installation
-
-Install the dependencies:
-
-```bash
-npm install
-```
-
-### Development
-
-Start the development server with HMR:
-
-```bash
-npm run dev
-```
-
-Your application will be available at `http://localhost:5173`.
-
-## Building for Production
-
-Create a production build:
-
-```bash
-npm run build
-```
-
-## Deployment
-
-### Docker Deployment
-
-To build and run using Docker:
-
-```bash
-docker build -t my-app .
-
-# Run the container
-docker run -p 3000:3000 my-app
-```
-
-The containerized application can be deployed to any platform that supports Docker, including:
-
-- AWS ECS
-- Google Cloud Run
-- Azure Container Apps
-- Digital Ocean App Platform
-- Fly.io
-- Railway
-
-### DIY Deployment
-
-If you're familiar with deploying Node applications, the built-in app server is production-ready.
-
-Make sure to deploy the output of `npm run build`
-
-```
-├── package.json
-├── package-lock.json (or pnpm-lock.yaml, or bun.lockb)
-├── build/
-│   ├── client/    # Static assets
-│   └── server/    # Server-side code
-```
-
-## Styling
-
-This template comes with [Tailwind CSS](https://tailwindcss.com/) already configured for a simple default starting experience. You can use whatever CSS framework you prefer.
+- [Table of Contents](#table-of-contents)
+  - [Installation](#installation)
+  - [Routing](#routing)
+  - [Route Module](#route-module)
+  - [Rendering Strategies](#rendering-strategies)
+  - [Data Loading](#data-loading)
+  - [Actions](#actions)
+  - [Navigating](#navigating)
+  - [Pending UI](#pending-ui)
+  - [Testing](#testing)
+  - [Custom Framework](#custom-framework)
+  - [Conclusion](#conclusion)
 
 ---
 
-Built with ❤️ using React Router.
+## Installation
+
+Most React Router projects start with a template. These templates are maintained by the React Router team and help you quickly get set up:
+
+```bash
+npx create-react-router@latest my-react-router-app
+```
+
+Now change into the new directory and start the development server:
+
+```bash
+cd my-react-router-app
+npm i
+npm run dev
+```
+
+Open your browser to `http://localhost:5173` to see the running app.
+
+For more templates and deployment-ready setups, refer to the official React Router templates.
+
+---
+
+## Routing
+
+**Where do routes live?**
+Routes are defined in `app/routes.ts`. Each route has a URL pattern and a file path that points to its route module (the file defining its logic and UI).
+
+**Basic Example:**
+
+```typescript
+import { type RouteConfig, route } from "@react-router/dev/routes"
+
+export default [route("some/path", "./some/file.tsx")] satisfies RouteConfig
+```
+
+**More Complex Example:**
+
+```typescript
+import { type RouteConfig, route, index, layout, prefix } from "@react-router/dev/routes"
+
+export default [
+    index("./home.tsx"),
+    route("about", "./about.tsx"),
+
+    layout("./auth/layout.tsx", [route("login", "./auth/login.tsx"), route("register", "./auth/register.tsx")]),
+
+    ...prefix("concerts", [
+        index("./concerts/home.tsx"),
+        route(":city", "./concerts/city.tsx"),
+        route("trending", "./concerts/trending.tsx"),
+    ]),
+] satisfies RouteConfig
+```
+
+You can also use file-system routing conventions by using `@react-router/fs-routes`.
+
+**Nested Routes:**
+
+```typescript
+export default [route("dashboard", "./dashboard.tsx", [index("./home.tsx"), route("settings", "./settings.tsx")])]
+```
+
+The parent route’s `<Outlet />` renders the child routes.
+
+**Root Route:**
+Every route is nested inside `app/root.tsx`. This special root route can provide global layouts or error boundaries.
+
+**Layout Routes:**
+Layout routes create nesting in the UI without adding to the URL.
+
+**Index Routes:**
+`index()` defines a default child route at the parent’s URL.
+
+**Route Prefixes:**
+`prefix()` can add a path prefix to a set of routes for organization.
+
+**Dynamic Segments:**
+Use `:paramName` in the path to define a dynamic URL segment. These values are available in `params` in loaders, actions, and components.
+
+---
+
+## Route Module
+
+Each route’s file (referenced in `routes.ts`) is a "route module." It can contain:
+
+-   A default exported component to render the UI.
+-   `loader` or `clientLoader` for data fetching.
+-   `action` or `clientAction` for data mutations.
+-   Error boundaries and headers.
+
+**Example:**
+
+```typescript
+import type { Route } from "./+types/team"
+
+export async function loader({ params }: Route.LoaderArgs) {
+    let team = await fetchTeam(params.teamId)
+    return { name: team.name }
+}
+
+export default function Team({ loaderData }: Route.ComponentProps) {
+    return <h1>{loaderData.name}</h1>
+}
+```
+
+Nested routes let you build complex layouts. Remember to place `<Outlet />` in the parent route’s component to render children.
+
+---
+
+## Rendering Strategies
+
+React Router supports three main strategies:
+
+1. **Client Side Rendering (CSR):**
+   The entire app runs in the browser.
+
+    ```typescript
+    import type { Config } from "@react-router/dev/config"
+    export default {
+        ssr: false,
+    } satisfies Config
+    ```
+
+2. **Server Side Rendering (SSR):**
+   The initial render happens on the server.
+
+    ```typescript
+    export default {
+        ssr: true,
+    } satisfies Config
+    ```
+
+3. **Static Pre-rendering:**
+   Generate static HTML at build time.
+    ```typescript
+    export default {
+        async prerender() {
+            return ["/", "/about", "/contact"]
+        },
+    } satisfies Config
+    ```
+
+These strategies can be mixed. For example, you can statically pre-render some URLs and server-render others.
+
+---
+
+## Data Loading
+
+Data is fetched in route modules using `loader` and `clientLoader`.
+
+-   **clientLoader:** Fetch data in the browser only.
+-   **loader:** Fetch data on the server (for SSR) or at build time (for pre-rendering).
+
+**Client Data Loading Example:**
+
+```typescript
+export async function clientLoader({ params }: Route.ClientLoaderArgs) {
+    const res = await fetch(`/api/products/${params.pid}`)
+    return await res.json()
+}
+```
+
+**Server Data Loading Example:**
+
+```typescript
+export async function loader({ params }: Route.LoaderArgs) {
+    return fakeDb.getProduct(params.pid)
+}
+```
+
+You can use both `loader` and `clientLoader` in the same route: `loader` for SSR/pre-rendered content, and `clientLoader` for subsequent navigations in the browser.
+
+---
+
+## Actions
+
+Actions handle data mutations (POST, PUT, DELETE). After completion, all loader data is revalidated automatically.
+
+-   **clientAction:** Runs in the browser.
+-   **action:** Runs on the server.
+
+**Client Action Example:**
+
+```typescript
+export async function clientAction({ request }: Route.ClientActionArgs) {
+    let formData = await request.formData()
+    let title = formData.get("title")
+    let project = await someApi.updateProject({ title })
+    return project
+}
+```
+
+**Calling Actions:**
+
+-   Using `<Form method="post">`
+-   Using `useSubmit()` hook
+-   Using `<fetcher.Form>` for no-navigation updates
+
+---
+
+## Navigating
+
+Users navigate using:
+
+-   **`<NavLink>`:** For styled navigation with active/pending states.
+-   **`<Link>`:** Simple navigation.
+-   **`<Form>`:** Submit data and navigate based on user input.
+-   **`redirect`** inside loaders/actions.
+-   **`useNavigate()`:** Imperative navigation hook.
+
+**Example `<NavLink>`:**
+
+```jsx
+<NavLink to="/home" className={({ isActive }) => (isActive ? "active" : "")}>
+    Home
+</NavLink>
+```
+
+---
+
+## Pending UI
+
+Show pending states while data loads or actions run:
+
+-   `useNavigation()` gives global navigation states.
+-   `<NavLink>` can display pending states.
+-   `<fetcher>` forms show localized pending states.
+
+**Fetcher Example:**
+
+```jsx
+const fetcher = useFetcher()
+return (
+    <fetcher.Form method="post">
+        <button type="submit">{fetcher.state !== "idle" ? "Saving..." : "Save"}</button>
+    </fetcher.Form>
+)
+```
+
+**Optimistic UI:**
+Use the submitted data to immediately update the UI, even before the server responds, for a more responsive feel.
+
+---
+
+## Testing
+
+Use `createRoutesStub` to test components that rely on React Router’s context:
+
+```jsx
+import { createRoutesStub } from "react-router"
+import { render, screen } from "@testing-library/react"
+import { LoginForm } from "./LoginForm"
+
+const Stub = createRoutesStub([
+    {
+        path: "/login",
+        Component: LoginForm,
+        action() {
+            return { errors: { username: "Username required" } }
+        },
+    },
+])
+
+test("shows error messages", async () => {
+    render(<Stub initialEntries={["/login"]} />)
+    // interact and assert...
+})
+```
+
+This allows you to test route modules and components in isolation, ensuring your UI logic is solid.
+
+---
+
+## Custom Framework
+
+Putting it all together, React Router behaves like a full framework:
+
+-   File-based (or configuration-based) routing
+-   Nested routes for layouts
+-   Data loading and actions integrated at the route level
+-   SSR, CSR, and static pre-rendering all supported
+-   Automatic data revalidation after actions
+-   Pending states, optimistic UI, and fetchers for a rich user experience
+
+This cohesive approach reduces boilerplate, clarifies data flow, and makes building scalable, data-driven React apps much simpler.
+
+---
+
+## Conclusion
+
+By following these steps, you’ve learned how to install React Router, configure routes, define route modules, choose rendering strategies, load data, perform actions, navigate efficiently, handle pending UI states, test route modules, and leverage React Router’s tools as a complete framework.
+
+Happy routing!

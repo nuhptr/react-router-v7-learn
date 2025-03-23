@@ -1,14 +1,13 @@
-import { type RouteConfig, index, route } from "@react-router/dev/routes"
+import { type RouteConfig, index, layout, prefix, route } from "@react-router/dev/routes"
 
 export default [
     // Static Routes
     index("routes/home.tsx"),
-    route("about", "routes/about.tsx"),
-    route("post/:postId", "routes/post.tsx"),
+    ...prefix("adi", [route("about", "routes/about.tsx"), route("post/:postId", "routes/post.tsx")]),
 
-    // Nested Routes
-    route("dashboard", "routes/dashboard.tsx", [
-        route("finances", "routes/finance.tsx"),
+    // Nested Routes using the `layout` helper
+    layout("routes/dashboard.tsx", [
+        route("finance", "routes/finance.tsx"),
         route("personal-info", "routes/personal-info.tsx"),
     ]),
 ] satisfies RouteConfig
